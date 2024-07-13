@@ -37,6 +37,8 @@ contract CLLockerHook is CLBaseHook {
 
     mapping(PoolId => mapping(uint256 => CLLockerData.LockInfo)) public lockInfo;
 
+    event LiquidityAdded(uint256 tokenId, uint256 unlockDate);
+
     constructor(ICLPoolManager _poolManager) CLBaseHook(_poolManager) {
         nfp = NonfungiblePositionManager(payable(0xe05b539447B17630Cb087473F6b50E5c5f73FDeb));
     }
@@ -98,7 +100,7 @@ contract CLLockerHook is CLBaseHook {
         });
         PoolId poolId = key.toId();
 
-        // comment recup token0 and token1 avec _poolManager poolId
+        // comment recup token0 and token1 avec _poolManager et poolId
         require(IERC20(params.currency0).transferFrom(msg.sender, Constants.vault, params.amount0Desired), "");
         require(IERC20(params.currency1).transferFrom(msg.sender, Constants.vault, params.amount1Desired), "");
 
@@ -124,6 +126,8 @@ contract CLLockerHook is CLBaseHook {
         CLLockerData.LockInfo storage lock = lockInfo[poolId][tokenId];
 
         lock.unlockDate = params.unlockDate;
+
+        emit LiquidityAdded(tokenId, params.unlockDate);
     }
 
     function decreaseLiquidity(
