@@ -33,7 +33,9 @@ contract CLLockerHook is CLBaseHook {
     /// @notice Not the holder of the nft
     error NotOwnerOfSelectedNFT();
 
-    event LiquidityAdded(uint256 tokenId, uint256 unlockDate);
+    event LiquidityAdded(uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1, uint256 unlockDate);
+
+    event DecreaseLiquidity(uint256 tokenId, uint128 liquidity, uint256 removedAmount0, uint256 removedAmount1);
 
     mapping(PoolId => mapping(uint256 => CLLockerData.LockInfo)) public lockInfo;
 
@@ -98,7 +100,6 @@ contract CLLockerHook is CLBaseHook {
         });
         PoolId poolId = key.toId();
 
-        // comment recup token0 and token1 avec _poolManager et poolId
         require(
             IERC20(Currency.unwrap(params.currency0)).transferFrom(msg.sender, Constants.vault, params.amount0Desired),
             ""
@@ -131,7 +132,7 @@ contract CLLockerHook is CLBaseHook {
 
         lock.unlockDate = params.unlockDate;
 
-        emit LiquidityAdded(tokenId, params.unlockDate);
+        emit LiquidityAdded(tokenId, liquidity, amount0, amount1, params.unlockDate);
     }
 
     function decreaseLiquidity(
@@ -163,5 +164,7 @@ contract CLLockerHook is CLBaseHook {
             });
 
         (amount0, amount1) = nfp.decreaseLiquidity(decreaseLiquidityParams);
+
+        emit DecreaseLiquidity(params.tokenId, params.liquidity, amount0, amount1);
     }
 }
