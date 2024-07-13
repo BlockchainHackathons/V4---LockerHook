@@ -37,6 +37,8 @@ contract CLLockerHook is CLBaseHook {
 
     event DecreaseLiquidity(uint256 tokenId, uint128 liquidity, uint256 removedAmount0, uint256 removedAmount1);
 
+    event ExtendLock(uint256 tokenId, uint256 unlockDate);
+
     mapping(PoolId => mapping(uint256 => CLLockerData.LockInfo)) public lockInfo;
 
     constructor(ICLPoolManager _poolManager) CLBaseHook(_poolManager) {
@@ -166,5 +168,21 @@ contract CLLockerHook is CLBaseHook {
         (amount0, amount1) = nfp.decreaseLiquidity(decreaseLiquidityParams);
 
         emit DecreaseLiquidity(params.tokenId, params.liquidity, amount0, amount1);
+    }
+
+    function extendLock(uint256 tokenId, PoolKey calldata key, uint256 newUnlockDate) external {
+        PoolId poolId = key.toId();
+
+        if (msg.sender == nfp.ownerOf(tokenId)) revert NotOwnerOfSelectedNFT();
+
+        require(newUnlockDate > block.timestamp, "New unlock date must be in the future");
+
+        CLLockerData.LockInfo storage lock = lockInfo[poolId][tokenId];
+
+        require(newUnlockDate > lock.unlockDate, "New unlock date must be afterwards the current unlockDate");
+
+        lock.unlockDate = newUnlockDate;
+
+        emit ExtendLock(tokenId, newUnlockDate)
     }
 }
