@@ -153,7 +153,7 @@ contract CLLockerHook is CLBaseHook {
 
         if (block.timestamp >= lock.unlockDate) revert PositionIsLocked();
 
-        INonfungiblePositionManager.DecreaseLiquidityParams memory params = INonfungiblePositionManager
+        INonfungiblePositionManager.DecreaseLiquidityParams memory decreaseLiquidityParams = INonfungiblePositionManager
             .DecreaseLiquidityParams({
                 tokenId: params.tokenId,
                 liquidity: params.liquidity,
@@ -162,6 +162,6 @@ contract CLLockerHook is CLBaseHook {
                 deadline: type(uint256).max
             });
 
-        (amount0, amount1) = nfp.decreaseLiquidity(params);
+        (amount0, amount1) = nfp.decreaseLiquidity(decreaseLiquidityParams);
     }
 }
