@@ -25,7 +25,7 @@ contract Launcher is Deployers {
     constructor() {
         nfp = NonfungiblePositionManager(payable(0xe05b539447B17630Cb087473F6b50E5c5f73FDeb));
         poolm = ICLPoolManager(address(0x40a081A39E9638fa6e2463B92A4eff4Bdf877179));
-        clockhook = CLLockerHook(0xb96868461794F528de109D19511E89674f58C128);
+        clockhook = CLLockerHook(0x2BdD231a07076ba609F4B7eC50226296d5A73B16);
     }
 
     function initializePool(Currency currency0, Currency currency1, uint24 fee) external {

@@ -74,7 +74,7 @@ contract CLLockerHook is CLBaseHook {
         ICLPoolManager.ModifyLiquidityParams calldata params,
         bytes calldata hookData
     ) external override poolManagerOnly returns (bytes4) {
-        if (sender != address(this)) revert SenderMustBeHook();
+        // if (sender != address(this)) revert SenderMustBeHook();
 
         return this.beforeAddLiquidity.selector;
     }
@@ -86,8 +86,7 @@ contract CLLockerHook is CLBaseHook {
         ICLPoolManager.ModifyLiquidityParams calldata params,
         bytes calldata hookData
     ) external override poolManagerOnly returns (bytes4) {
-        if (sender != address(this)) revert SenderMustBeHook();
-
+        // if (sender != address(this)) revert SenderMustBeHook();
         return this.beforeRemoveLiquidity.selector;
     }
 
@@ -103,13 +102,16 @@ contract CLLockerHook is CLBaseHook {
         PoolId poolId = key.toId();
 
         require(
-            IERC20(Currency.unwrap(params.currency0)).transferFrom(msg.sender, Constants.vault, params.amount0Desired),
+            IERC20(Currency.unwrap(params.currency0)).transferFrom(msg.sender, address(this), params.amount0Desired),
             ""
         );
         require(
-            IERC20(Currency.unwrap(params.currency1)).transferFrom(msg.sender, Constants.vault, params.amount1Desired),
+            IERC20(Currency.unwrap(params.currency1)).transferFrom(msg.sender, address(this), params.amount1Desired),
             ""
         );
+
+        IERC20(Currency.unwrap(params.currency0)).approve(address(nfp), params.amount0Desired);
+        IERC20(Currency.unwrap(params.currency1)).approve(address(nfp), params.amount1Desired);
 
         (uint160 sqrtPriceX96, , , ) = poolManager.getSlot0(poolId);
 
