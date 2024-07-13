@@ -183,6 +183,6 @@ contract CLLockerHook is CLBaseHook {
 
         lock.unlockDate = newUnlockDate;
 
-        emit ExtendLock(tokenId, newUnlockDate)
+        emit ExtendLock(tokenId, newUnlockDate);
     }
 }
