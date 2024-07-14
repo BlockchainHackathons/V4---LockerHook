@@ -10,6 +10,7 @@ import {CLLockerHook} from "./pool-cl/CLLockerHook.sol";
 import {Currency, CurrencyLibrary} from "@pancakeswap/v4-core/src/types/Currency.sol";
 import {Deployers} from "@pancakeswap/v4-core/test/pool-cl/helpers/Deployers.sol";
 import {CLPoolParametersHelper} from "@pancakeswap/v4-core/src/pool-cl/libraries/CLPoolParametersHelper.sol";
+import {PoolId, PoolIdLibrary} from "@pancakeswap/v4-core/src/types/PoolId.sol";
 
 contract Launcher is Deployers {
     using PoolIdLibrary for PoolKey;
@@ -20,7 +21,7 @@ contract Launcher is Deployers {
     ICLPoolManager poolm;
     CLLockerHook clockhook;
 
-    event Initialize(Currency currency0, Currency currency1, uint24 fee, CLLockerHook clockhook);
+    event Initialize(PoolId poolId, Currency currency0, Currency currency1, uint24 fee, CLLockerHook clockhook);
 
     constructor() {
         nfp = NonfungiblePositionManager(payable(0xe05b539447B17630Cb087473F6b50E5c5f73FDeb));
@@ -38,8 +39,10 @@ contract Launcher is Deployers {
             parameters: bytes32(uint256(clockhook.getHooksRegistrationBitmap())).setTickSpacing(10)
         });
 
+        PoolId poolId = key.toId();
+
         poolm.initialize(key, SQRT_RATIO_1_1, ZERO_BYTES);
 
-        emit Initialize(currency0, currency1, fee, clockhook);
+        emit Initialize(poolId, currency0, currency1, fee, clockhook);
     }
 }

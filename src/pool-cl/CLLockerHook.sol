@@ -33,7 +33,14 @@ contract CLLockerHook is CLBaseHook {
     /// @notice Not the holder of the nft
     error NotOwnerOfSelectedNFT();
 
-    event LiquidityAdded(uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1, uint256 unlockDate);
+    event LiquidityAdded(
+        PoolId poolId,
+        uint256 tokenId,
+        uint128 liquidity,
+        uint256 amount0,
+        uint256 amount1,
+        uint256 unlockDate
+    );
 
     event DecreaseLiquidity(uint256 tokenId, uint128 liquidity, uint256 removedAmount0, uint256 removedAmount1);
 
@@ -136,7 +143,7 @@ contract CLLockerHook is CLBaseHook {
 
         lock.unlockDate = params.unlockDate;
 
-        emit LiquidityAdded(tokenId, liquidity, amount0, amount1, params.unlockDate);
+        emit LiquidityAdded(poolId, tokenId, liquidity, amount0, amount1, params.unlockDate);
     }
 
     function decreaseLiquidity(
@@ -172,9 +179,7 @@ contract CLLockerHook is CLBaseHook {
         emit DecreaseLiquidity(params.tokenId, params.liquidity, amount0, amount1);
     }
 
-    function extendLock(uint256 tokenId, PoolKey calldata key, uint256 newUnlockDate) external {
-        PoolId poolId = key.toId();
-
+    function extendLock(uint256 tokenId, PoolId poolId, uint256 newUnlockDate) external {
         if (msg.sender == nfp.ownerOf(tokenId)) revert NotOwnerOfSelectedNFT();
 
         require(newUnlockDate > block.timestamp, "New unlock date must be in the future");
