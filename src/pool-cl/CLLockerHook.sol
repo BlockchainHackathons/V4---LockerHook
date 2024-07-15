@@ -13,13 +13,14 @@ import {INonfungiblePositionManager} from "@pancakeswap/v4-periphery/src/pool-cl
 import {CLLockerData} from "./libraries/CLLockerData.sol";
 import {Constants} from "./libraries/Constants.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {ERC721, ERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 
 /// @notice CLCounterHook is a contract that counts the number of times a hook is called
 /// @dev note the code is not production ready, it is only to share how a hook looks like
-contract CLLockerHook is CLBaseHook {
+contract CLLockerHook is CLBaseHook, ERC721Enumerable {
     using PoolIdLibrary for PoolKey;
 
-    NonfungiblePositionManager nfp;
+    NonfungiblePositionManager public nfp;
 
     /// @notice The sender is not the hook
     error SenderMustBeHook();
@@ -32,6 +33,18 @@ contract CLLockerHook is CLBaseHook {
 
     /// @notice Not the holder of the nft
     error NotOwnerOfSelectedNFT();
+
+    /// @notice Insufficient liquidity in the position
+    error InsufficientLiquidity(uint128 available, uint128 required);
+
+    /// @notice Failed to transfer token
+    error TransferFailed();
+
+    /// @notice New unlock date must be in the future
+    error UnlockDateInFuture();
+
+    /// @notice New unlock date must be after the current unlock date
+    error UnlockDateAfterCurrent();
 
     event LiquidityAdded(
         PoolId poolId,
@@ -48,8 +61,11 @@ contract CLLockerHook is CLBaseHook {
 
     mapping(PoolId => mapping(uint256 => CLLockerData.LockInfo)) public lockInfo;
 
-    constructor(ICLPoolManager _poolManager) CLBaseHook(_poolManager) {
-        nfp = NonfungiblePositionManager(payable(0xe05b539447B17630Cb087473F6b50E5c5f73FDeb));
+    constructor(ICLPoolManager _poolManager, NonfungiblePositionManager _nfp) 
+        CLBaseHook(_poolManager) 
+        ERC721("Liquidity Position", "LQP")
+    {
+        nfp = _nfp;
     }
 
     function getHooksRegistrationBitmap() external pure override returns (uint16) {
@@ -81,8 +97,6 @@ contract CLLockerHook is CLBaseHook {
         ICLPoolManager.ModifyLiquidityParams calldata params,
         bytes calldata hookData
     ) external override poolManagerOnly returns (bytes4) {
-        // if (sender != address(this)) revert SenderMustBeHook();
-
         return this.beforeAddLiquidity.selector;
     }
 
@@ -93,7 +107,6 @@ contract CLLockerHook is CLBaseHook {
         ICLPoolManager.ModifyLiquidityParams calldata params,
         bytes calldata hookData
     ) external override poolManagerOnly returns (bytes4) {
-        // if (sender != address(this)) revert SenderMustBeHook();
         return this.beforeRemoveLiquidity.selector;
     }
 
@@ -108,20 +121,18 @@ contract CLLockerHook is CLBaseHook {
         });
         PoolId poolId = key.toId();
 
-        require(
-            IERC20(Currency.unwrap(params.currency0)).transferFrom(msg.sender, address(this), params.amount0Desired),
-            ""
-        );
-        require(
-            IERC20(Currency.unwrap(params.currency1)).transferFrom(msg.sender, address(this), params.amount1Desired),
-            ""
-        );
+        if (!IERC20(Currency.unwrap(params.currency0)).transferFrom(msg.sender, address(this), params.amount0Desired)) {
+            revert TransferFailed();
+        }
+        if (!IERC20(Currency.unwrap(params.currency1)).transferFrom(msg.sender, address(this), params.amount1Desired)) {
+            revert TransferFailed();
+        }
 
         IERC20(Currency.unwrap(params.currency0)).approve(address(nfp), params.amount0Desired);
         IERC20(Currency.unwrap(params.currency1)).approve(address(nfp), params.amount1Desired);
 
         (uint160 sqrtPriceX96, , , ) = poolManager.getSlot0(poolId);
-
+        
         if (sqrtPriceX96 == 0) revert PoolNotInitialized();
 
         INonfungiblePositionManager.MintParams memory mintParams = INonfungiblePositionManager.MintParams({
@@ -132,16 +143,18 @@ contract CLLockerHook is CLBaseHook {
             amount1Desired: params.amount1Desired,
             amount0Min: params.amount0Min,
             amount1Min: params.amount1Min,
-            recipient: params.to,
+            recipient: address(this),//params.to,
             deadline: params.deadline,
             salt: bytes32(0)
         });
-
+        
         (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1) = nfp.mint(mintParams);
 
         CLLockerData.LockInfo storage lock = lockInfo[poolId][tokenId];
 
         lock.unlockDate = params.unlockDate;
+
+        _mint(msg.sender, tokenId);
 
         emit LiquidityAdded(poolId, tokenId, liquidity, amount0, amount1, params.unlockDate);
     }
@@ -149,7 +162,9 @@ contract CLLockerHook is CLBaseHook {
     function decreaseLiquidity(
         CLLockerData.DecreaseLiquidityParams calldata params
     ) external returns (uint256 amount0, uint256 amount1) {
-        if (msg.sender == nfp.ownerOf(params.tokenId)) revert NotOwnerOfSelectedNFT();
+        if (ownerOf(params.tokenId) != msg.sender) {
+            revert NotOwnerOfSelectedNFT();
+        }
 
         PoolKey memory key = PoolKey({
             currency0: params.currency0,
@@ -163,7 +178,17 @@ contract CLLockerHook is CLBaseHook {
 
         CLLockerData.LockInfo memory lock = lockInfo[poolId][params.tokenId];
 
-        if (block.timestamp >= lock.unlockDate) revert PositionIsLocked();
+        if (block.timestamp <= lock.unlockDate) {
+            revert PositionIsLocked();
+        }
+
+        // Retrieve the position details
+        ( , , , , , , , uint128 liquidity, , , , , ) = nfp.positions(params.tokenId);
+
+        // Check if the position has enough liquidity to be decreased
+        if (liquidity < params.liquidity) {
+            revert InsufficientLiquidity(liquidity, params.liquidity);
+        }
 
         INonfungiblePositionManager.DecreaseLiquidityParams memory decreaseLiquidityParams = INonfungiblePositionManager
             .DecreaseLiquidityParams({
@@ -180,13 +205,19 @@ contract CLLockerHook is CLBaseHook {
     }
 
     function extendLock(uint256 tokenId, PoolId poolId, uint256 newUnlockDate) external {
-        if (msg.sender == nfp.ownerOf(tokenId)) revert NotOwnerOfSelectedNFT();
+        if (ownerOf(tokenId) != msg.sender) {
+            revert NotOwnerOfSelectedNFT();
+        }
 
-        require(newUnlockDate > block.timestamp, "New unlock date must be in the future");
+        if (newUnlockDate <= block.timestamp) {
+            revert UnlockDateInFuture();
+        }
 
         CLLockerData.LockInfo storage lock = lockInfo[poolId][tokenId];
 
-        require(newUnlockDate > lock.unlockDate, "New unlock date must be afterwards the current unlockDate");
+        if (newUnlockDate <= lock.unlockDate) {
+            revert UnlockDateAfterCurrent();
+        }
 
         lock.unlockDate = newUnlockDate;
 
