@@ -53,15 +53,15 @@ contract DeployFullRangeNouns is Script {
             currency1: currency1,
             hooks: hook,
             poolManager: poolm,
-            fee: uint24(3000),
+            fee: uint24(150),
             parameters: bytes32(uint256(hook.getHooksRegistrationBitmap())).setTickSpacing(10)
         });
         console.log("FullRangeNouns deployed at:");
         vm.startBroadcast();
         //poolm.initialize(key, SQRT_PRICE_1_1, ZERO_BYTES);
         //swapTokens(key);
-        //addLiquidity(hook, key);
-        decreaseLiquidity(hook, key);
+        addLiquidity(hook, key);
+        //decreaseLiquidity(hook, key);
         vm.stopBroadcast();
     }
 
@@ -88,7 +88,7 @@ contract DeployFullRangeNouns is Script {
         CLLockerData.AddLiquidityParams memory params = CLLockerData.AddLiquidityParams({
             currency0: currency0,
             currency1: currency1,
-            fee: uint24(3000),
+            fee: uint24(150),
             parameters: key.parameters,
             amount0Desired: amount0Desired,
             amount1Desired: amount1Desired,
