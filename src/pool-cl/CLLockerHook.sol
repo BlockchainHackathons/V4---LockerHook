@@ -59,6 +59,8 @@ contract CLLockerHook is CLBaseHook, ERC721Enumerable {
 
     event ExtendLock(uint256 tokenId, uint256 unlockDate);
 
+    event LockPosition(uint256 tokenId, uint256 unlockDate);
+
     mapping(PoolId => mapping(uint256 => CLLockerData.LockInfo)) public lockInfo;
 
     constructor(ICLPoolManager _poolManager, NonfungiblePositionManager _nfp) 
@@ -97,6 +99,7 @@ contract CLLockerHook is CLBaseHook, ERC721Enumerable {
         ICLPoolManager.ModifyLiquidityParams calldata params,
         bytes calldata hookData
     ) external override poolManagerOnly returns (bytes4) {
+        
         return this.beforeAddLiquidity.selector;
     }
 
@@ -107,6 +110,7 @@ contract CLLockerHook is CLBaseHook, ERC721Enumerable {
         ICLPoolManager.ModifyLiquidityParams calldata params,
         bytes calldata hookData
     ) external override poolManagerOnly returns (bytes4) {
+         
         return this.beforeRemoveLiquidity.selector;
     }
 
@@ -222,5 +226,26 @@ contract CLLockerHook is CLBaseHook, ERC721Enumerable {
         lock.unlockDate = newUnlockDate;
 
         emit ExtendLock(tokenId, newUnlockDate);
+    }
+    //TODO : Should recreate key only from tokenId or revert
+    function lock(PoolKey calldata key, uint256 tokenId, uint256 unlockDate) external {
+        if (nfp.ownerOf(tokenId) != msg.sender) {
+            revert NotOwnerOfSelectedNFT();
+        }
+
+        if (unlockDate <= block.timestamp) {
+            revert UnlockDateInFuture();
+        }
+
+        // Transfer the NFT from the user to this contract
+        nfp.transferFrom(msg.sender, address(this), tokenId);
+
+        
+        PoolId poolId = key.toId();
+
+        CLLockerData.LockInfo storage lock = lockInfo[poolId][tokenId];
+        lock.unlockDate = unlockDate;
+
+        emit LockPosition(tokenId, unlockDate);
     }
 }

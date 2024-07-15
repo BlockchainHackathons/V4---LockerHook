@@ -10,11 +10,13 @@ import {CLLockerHook} from "../../src/pool-cl/CLLockerHook.sol";
 import {CLLockerData} from "../../src/pool-cl/libraries/CLLockerData.sol";
 import {ICLPoolManager} from "@pancakeswap/v4-core/src/pool-cl/interfaces/ICLPoolManager.sol";
 import {NonfungiblePositionManager} from "@pancakeswap/v4-periphery/src/pool-cl/NonfungiblePositionManager.sol";
+import {INonfungiblePositionManager} from "@pancakeswap/v4-periphery/src/pool-cl/interfaces/INonfungiblePositionManager.sol";
 import {SortTokens} from "@pancakeswap/v4-core/test/helpers/SortTokens.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {CLPoolParametersHelper} from "@pancakeswap/v4-core/src/pool-cl/libraries/CLPoolParametersHelper.sol";
 import {PoolIdLibrary} from "@pancakeswap/v4-core/src/types/PoolId.sol"; // Ensure PoolIdLibrary is imported
 import {PoolId} from "@pancakeswap/v4-core/src/types/PoolId.sol"; // Import PoolId
+import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
 contract CLLockerHookTest is Test, CLTestUtils {
     using CLPoolParametersHelper for bytes32;
@@ -201,5 +203,49 @@ contract CLLockerHookTest is Test, CLTestUtils {
 
         //add assert
         assert(hook.lockInfo(poolId,tokenId)==newUnlockDate);
+    }
+
+        function testLockSuccess() public {
+        // Ensure initial token balances are set
+        MockERC20(Currency.unwrap(currency0)).mint(address(this), 1000000);
+        MockERC20(Currency.unwrap(currency1)).mint(address(this), 1000000);
+
+        uint256 amount0Desired = 1000;
+        uint256 amount1Desired = 1000;
+        uint256 amount0Min = 0;
+        uint256 amount1Min = 0;
+        uint256 deadline = block.timestamp + 1 hours;
+        int24 tickLower = -887220;
+        int24 tickUpper = 887220;
+        uint256 unlockDate = block.timestamp + 30 days;
+
+        INonfungiblePositionManager.MintParams memory mintParams = INonfungiblePositionManager.MintParams({
+            poolKey: poolKey,
+            tickLower: tickLower,
+            tickUpper: tickUpper,
+            amount0Desired: amount0Desired,
+            amount1Desired: amount1Desired,
+            amount0Min: amount0Min,
+            amount1Min: amount1Min,
+            recipient: address(this),
+            deadline: deadline,
+            salt: bytes32(0)
+        });
+
+        (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1) = nfp.mint(mintParams);
+
+        PoolKey memory key = poolKey;
+
+        // Approve the transfer
+        nfp.approve(address(hook), tokenId);
+
+
+        // Call the lock function
+        hook.lock(key, tokenId, unlockDate);
+
+        // Verify the lock info
+        PoolId poolId = key.toId();
+        assertEq(nfp.ownerOf(tokenId), address(hook));
+        assertEq(hook.lockInfo(poolId, tokenId), unlockDate);
     }
 }
